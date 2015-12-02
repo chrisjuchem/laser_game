@@ -1,0 +1,185 @@
+(require 2htdp/image)
+(require 2htdp/universe)
+
+;DATA
+
+; A World is [Listof GO]
+
+; A GameObject (GO) is one of:
+; - Player
+; - Enemy
+; - Border
+; - Beam
+
+; A Player is a (make-player Posn Number Number)
+; where posn is the location of the center of the player
+; where ang is the direction facing in degrees CCW from the right
+; where size is the player's radius
+(define-struct player (posn ang size))
+
+; An Enemy is a (make-enemy Posn Number Number)
+; where posn is the location of the center of the enemy
+; where ang is the direction facing in degrees CCW from the right
+; where size is the enery's radius
+(define-struct enemy (posn ang size))
+
+; A BorderType (BT) is one of
+; - 'hard
+; - 'soft
+; where beams can travel through soft borders
+; but players and enemies cannot
+
+; A Border is a (make-border BT [Listof Posn] Number)
+; where connecting the points in order forms the border
+; and size is the thickness of the border
+; ** points CANNOT have a length of 1 **
+(define-struct border (type points size))
+
+; A Beam is a (make-beam Color [Listof Posn] Number)
+; where connecting the points in order forms the beam
+; and size is the thickness of the beam
+; ** points CANNOT have a length of 1 **
+(define-struct beam (color points size))
+
+;A Segment is a (make-seg Posn Posn)
+(define-struct seg (from to))
+
+;===============================================================================
+
+;CONSTANTS
+
+(define GAME-WIDTH 800)
+(define GAME-HEIGHT 600)
+(define BG (empty-scene GAME-WIDTH GAME-HEIGHT))
+
+
+(define HARD-COLOR 'black)
+(define SOFT-COLOR 'grey)
+
+(define LEVEL0 (list (make-player (make-posn 200 40) 90 10)
+                     (make-enemy (make-posn 420 69) 72 25) 
+                     (make-enemy (make-posn 87 192) 250 15)
+                     (make-border 'hard (list (make-posn 300 200)
+                                              (make-posn 350 250)
+                                              (make-posn 500 270)) 8)))
+
+;===============================================================================
+
+;IMAGE FUNCZTIONS
+
+;place-image-posn : Image Posn Image -> Image
+(define (place-image-posn i1 p i2)
+  (place-image i1
+               (posn-x p)
+               (posn-y p)
+               i2))
+
+
+;player-img : Player -> Image
+(define (player-img p)
+  (rotate (- (player-ang p) 90)
+          (overlay/align/offset 'middle 'top
+                                (triangle (player-size p) 'solid 'black)
+                                0 -1
+                                (circle (player-size p) 'outline 'black))))
+(check-expect (player-img (make-player (make-posn 2 4) -30 5)) .)
+(check-expect (player-img (make-player (make-posn 2 4) 90 10)) .)
+(check-expect (player-img (make-player (make-posn 2 4) 137 25)) .)
+          
+;enemy-img : Enemy -> Image
+(define (enemy-img e)
+  (rotate (- (enemy-ang e) 90)
+          (overlay/align/offset 'middle 'top
+                                (triangle (enemy-size e) 'solid 'black)
+                                0 -1
+                                (overlay (circle (enemy-size e) 'outline 'black)
+                                         (circle (enemy-size e) 'solid 'red)))))
+(check-expect (enemy-img (make-enemy (make-posn 2 4) -30 5)) .)
+(check-expect (enemy-img (make-enemy (make-posn 2 4) 90 10)) .)
+(check-expect (enemy-img (make-enemy (make-posn 2 4) 137 25)) .)
+
+
+;add-seg : Segment Color Number Image -> Image
+(define (add-seg s c sz bg)
+  (local ((define x1 (posn-x (seg-from s)))
+          (define y1 (posn-y (seg-from s)))
+          (define x2 (posn-x (seg-to s)))
+          (define y2 (posn-y (seg-to s)))
+          ;(define avg (make-posn (/ (+ x1 x2) 2) (/ (+ y1 y2) 2)))
+          )
+    (add-line bg x1 y1 x2 y2
+              (make-pen c sz 'solid 'butt 'round))))
+   #| (rotate (* (/ 180 pi) (atan (/ (- y1 y2) (- x1 x2))))
+            (rectangle (sqrt (+ (sqr (- x1 x2))
+                        (sqr (- y1 y2))))
+               sz 'solid c))]
+|#
+
+
+;draw-players : World Image -> Image
+;draws all players in the world on the given image
+(define (draw-players w bg)
+  (foldr (λ (go img) (if (player? go)
+                         (place-image-posn (player-img go)
+                                           (player-posn go)
+                                           img)
+                         img))
+         bg
+         w))
+
+;draw-enemies : World Image -> Image
+;draws all enemies in the world on the given image
+(define (draw-enemies w bg)
+  (foldr (λ (go img) (if (enemy? go)
+                         (place-image-posn (enemy-img go)
+                                           (enemy-posn go)
+                                           img)
+                         img))
+         bg
+         w))
+
+;draw-borders : World Image -> Image
+;draws all borders in the world on the given image
+(define (draw-borders w bg)
+  (foldr (λ (go img) (if (border? go)
+                         (draw-lop (border-points go)
+                                   (if (symbol=? (border-type go) 'hard)
+                                       HARD-COLOR
+                                       SOFT-COLOR)
+                                   (border-size go)
+                                   img)
+                         img))
+         bg
+         w))
+
+;draw-lop: [Listof Posn] Color Number Image -> Image
+(define (draw-lop pts c sz bg)
+  (cond
+    [(> (length pts) 1)
+     (draw-lop (rest pts) c sz
+               (add-seg (make-seg (first pts) (second pts))
+                        c sz bg))]
+    [else bg]))
+
+;Uses 0,0 as the top left
+;draw : World -> Image
+(define (draw w)
+  ;TODO
+  (draw-enemies w (draw-players w (draw-borders w BG))))
+
+;===============================================================================
+
+;key : World KeyEvent -> World
+(define (key w ke)
+  ;TODO
+  w)
+
+;tick : World -> World
+(define (tick w)
+  ;TODO
+  w)
+
+(big-bang LEVEL0
+          (on-tick tick)
+          (on-key key)
+          (to-draw draw))
