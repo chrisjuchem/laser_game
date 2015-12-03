@@ -1,11 +1,7 @@
 (require 2htdp/image)
 (require 2htdp/universe)
 
-;TEST2
-
 ;DATA
-
-;Test1
 
 ; A GameState (GS) is one of
 ; - A World
