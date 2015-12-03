@@ -3,6 +3,11 @@
 
 ;DATA
 
+; A GameState (GS) is one of
+; - A World
+; - 'death
+; - 'win
+
 ; A World is [Listof GO]
 
 ; A GameObject (GO) is one of:
@@ -30,19 +35,24 @@
 ; but players and enemies cannot
 
 ; A Border is a (make-border BT [Listof Posn] Number)
-; where connecting the points in order forms the border
+; where connecting the points in order forms the border,
+; (length points) >= 2
 ; and size is the thickness of the border
-; ** points CANNOT have a length of 1 **
 (define-struct border (type points size))
 
-; A Beam is a (make-beam Color [Listof Posn] Number)
-; where connecting the points in order forms the beam
-; and size is the thickness of the beam
-; ** points CANNOT have a length of 1 **
-(define-struct beam (color points size))
+; A Beam is a (make-beam Color [Listof Posn] Number Number)
+; where connecting the points in order (starting from the end) forms the beam
+; (length points) >= 1
+; size is the thickness of the beam
+; and dir is the direction in degrees CCW from the right that the next segment
+;      of the beam will travel
+(define-struct beam (color points size dir))
 
 ;A Segment is a (make-seg Posn Posn)
 (define-struct seg (from to))
+
+;A [Pair X Y] is a (make-pair X Y)
+(define-struct pair (x y))
 
 ;===============================================================================
 
@@ -56,12 +66,25 @@
 (define HARD-COLOR 'black)
 (define SOFT-COLOR 'grey)
 
-(define LEVEL0 (list (make-player (make-posn 200 40) 90 10)
-                     (make-enemy (make-posn 420 69) 72 25) 
-                     (make-enemy (make-posn 87 192) 250 15)
-                     (make-border 'hard (list (make-posn 300 200)
-                                              (make-posn 350 250)
-                                              (make-posn 500 270)) 8)))
+(define LEVEL (list (make-border 'hard
+                                 (list (make-posn (- GAME-WIDTH 25) 25)
+                                       (make-posn (- GAME-WIDTH 25)
+                                                  (- GAME-HEIGHT 25))
+                                       (make-posn 25 (- GAME-HEIGHT 25))
+                                       (make-posn 25 25)
+                                       (make-posn (- GAME-WIDTH 25) 25))
+                                 8)))
+(define LEVEL0 (append (list (make-player (make-posn 200 40) 90 10)
+                             (make-enemy (make-posn 420 69) 72 25) 
+                             (make-enemy (make-posn 87 192) 250 15)
+                             (make-border 'hard (list (make-posn 300 575)
+                                                      (make-posn 300 300)
+                                                      (make-posn 340 470)) 4)
+                             (make-border 'hard (list (make-posn 400 575)
+                                                      (make-posn 400 300)
+                                                      (make-posn 360 470)) 4)
+                             (make-beam 'cyan (list (make-posn 420 69)) 3 120))
+                     LEVEL))
 
 ;===============================================================================
 
@@ -108,12 +131,16 @@
           ;(define avg (make-posn (/ (+ x1 x2) 2) (/ (+ y1 y2) 2)))
           )
     (add-line bg x1 y1 x2 y2
-              (make-pen c sz 'solid 'butt 'round))))
-   #| (rotate (* (/ 180 pi) (atan (/ (- y1 y2) (- x1 x2))))
-            (rectangle (sqrt (+ (sqr (- x1 x2))
-                        (sqr (- y1 y2))))
-               sz 'solid c))]
-|#
+              (make-pen c sz 'solid 'round 'round))))
+
+;draw-lop: [Listof Posn] Color Number Image -> Image
+(define (draw-lop pts c sz bg)
+  (cond
+    [(> (length pts) 1)
+     (draw-lop (rest pts) c sz
+               (add-seg (make-seg (first pts) (second pts))
+                        c sz bg))]
+    [else bg]))
 
 
 ;draw-players : World Image -> Image
@@ -152,34 +179,117 @@
          bg
          w))
 
-;draw-lop: [Listof Posn] Color Number Image -> Image
-(define (draw-lop pts c sz bg)
-  (cond
-    [(> (length pts) 1)
-     (draw-lop (rest pts) c sz
-               (add-seg (make-seg (first pts) (second pts))
-                        c sz bg))]
-    [else bg]))
+;draw-beam : World Image -> Image
+;draws all borders in the world on the given image
+(define (draw-beams w bg)
+  (foldr (λ (go img) (if (beam? go)
+                         (draw-lop (beam-points go)
+                                   (beam-color go)
+                                   (beam-size go)
+                                   img)
+                         img))
+         bg
+         w))
 
 ;Uses 0,0 as the top left
-;draw : World -> Image
+;draw : GS -> Image
 (define (draw w)
-  ;TODO
-  (draw-enemies w (draw-players w (draw-borders w BG))))
+  (if (symbol? w)
+      BG;TODO -> (cond [(symbol=? w ...) ...]    ...
+      (draw-borders w (draw-beams w (draw-enemies w (draw-players w BG))))))
 
 ;===============================================================================
 
-;key : World KeyEvent -> World
+;key : GS KeyEvent -> GS
 (define (key w ke)
-  ;TODO
-  w)
+  (if (symbol? w)
+      w
+      #|TODO|#w))
 
-;tick : World -> World
+;extend-beams : World -> World
+(define (extend-beams w)
+  (map (λ (go) (if (beam? go)
+                   (extend-beam go w)
+                   go))
+       w))
+
+;extend-beam : Beam World -> Beam
+(define (extend-beam b w)
+  (local ((define diry (- 0 (sin (/ (* (beam-dir b) pi) 180))))
+          (define dirx (cos (/ (* (beam-dir b) pi) 180)))
+          (define (lop->los lop)
+            (cond
+              [(> (length lop) 1) (cons (make-seg (first lop) (second lop))
+                                        (lop->los (rest lop)))]
+              [else empty]))
+          (define (all-hard-borders x)
+            (foldr (λ (go l) (if (and (border? go)
+                                      (symbol=? (border-type go) 'hard))
+                                 (append (lop->los (border-points go)) l)
+                                 l))
+                   empty
+                   w))
+          ;intersects : Segment -> [Pair Number Beam] or false
+          ;uses matrices to determine if the beam intersects a segment
+          (define (intersects? seg)
+            (local ((define b1x (posn-x (seg-to seg)))
+                    (define b2x (posn-x (seg-from seg)))
+                    (define b1y (posn-y (seg-to seg)))
+                    (define b2y (posn-y (seg-from seg)))
+                    (define brdy (- b1y b2y))
+                    (define brdx (- b1x b2x))
+                    (define det (- (* diry brdx) (* dirx brdy))))
+              (if (zero? det)
+                  false
+                  (local ((define a (- b2y (posn-y (first (beam-points b)))))
+                          (define c (- b2x (posn-x (first (beam-points b)))))
+                          (define s (/ (- (* dirx a) (* diry c)) det))
+                          (define t (/ (- (* brdx a) (* brdy c)) det)))
+                    (if (and (>= t 1) (<= s 1) (>= s 0))
+                        (make-pair
+                         t
+                         (make-beam
+                          (beam-color b)
+                          (cons
+                           (make-posn (+ (posn-x (first (beam-points b)))
+                                         (* t dirx))
+                                      (+ (posn-y (first (beam-points b)))
+                                         (* t diry)))
+                           (beam-points b))
+                          (beam-size b)
+                          ;new dir using Pu(v)
+                          (local ((define ux brdy)
+                                  (define uy (- 0 brdx))
+                                  (define vx dirx)
+                                  (define vy diry)
+                                  (define uv/uu (/ (+ (* ux vx) (* uy vy))
+                                                   (+ (* ux ux) (* uy uy))))
+                                  (define y (- (* 2 uv/uu uy) vy))
+                                  (define x (- vx (* 2 uv/uu ux))))
+                            (+ (if (< x 0) 180 0)
+                               (* (atan (/ y x))
+                                  (/ 180 pi))))))
+                         false)))))
+          (define result (foldr (λ (seg beam)
+                                  (local ((define res (intersects? seg)))
+                                    (cond
+                                      [(false? res) beam]
+                                      [(or (false? beam) 
+                                           (< (pair-x res) (pair-x beam))) res]
+                                      [else beam])))
+                                false
+                                (all-hard-borders 1))))
+        (if (false? result)
+            b
+            (pair-y result))))
+
+;tick : GS -> GS
 (define (tick w)
-  ;TODO
-  w)
+  (if (symbol? w)
+      w
+      #|TODO|#(extend-beams w)))
 
 (big-bang LEVEL0
-          (on-tick tick)
+          (on-tick tick 1/2)
           (on-key key)
           (to-draw draw))
