@@ -5,6 +5,8 @@
 
 ;DATA
 
+;Test1
+
 ; A GameState (GS) is one of
 ; - A World
 ; - 'death
