@@ -3,8 +3,6 @@
 
 ;DATA
 
-;changes
-
 ; A GameState (GS) is one of
 ; - A World
 ; - 'death
@@ -64,6 +62,11 @@
 (define GAME-HEIGHT 600)
 (define BG (empty-scene GAME-WIDTH GAME-HEIGHT))
 
+(define MAX-BEAM-LENGTH 8)
+(define BEAM-HOLD-TIME 15)
+
+(define FRIENDLY-COLOR 'cyan)
+(define ENEMY-COLOR 'red)
 
 (define HARD-COLOR 'black)
 (define SOFT-COLOR 'grey)
@@ -208,10 +211,68 @@
       w
       #|TODO|#w))
 
+;lop->los : [Listof Posn] -> [Listof Seg]
+(define (lop->los lop)
+  (cond
+    [(> (length lop) 1) (cons (make-seg (first lop) (second lop))
+                              (lop->los (rest lop)))]
+    [else empty]))
+
+;all-hard-borders: World -> [Listof Seg]
+(define (all-hard-borders w)
+  (foldr (λ (go l) (if (and (border? go)
+                            (symbol=? (border-type go) 'hard))
+                       (append (lop->los (border-points go)) l)
+                       l))
+         empty
+         w))
+
+;intersect? : Seg Seg -> Boolean
+(define (intersect? s1 s2)
+  (local ((define a (posn-x (seg-from s1)))
+          (define b (posn-y (seg-from s1)))
+          (define c (- (posn-x (seg-to s1)) a))
+          (define d (- (posn-y (seg-to s1)) b))
+          (define e (posn-x (seg-from s2)))
+          (define f (posn-y (seg-from s2)))
+          (define g (- (posn-x (seg-to s2)) e))
+          (define h (- (posn-y (seg-to s2)) f))
+          (define det (- (* g d) (* c h))))
+    (if (zero? det)
+        false
+        (local ((define t (/ (- (* g (- f b)) (* (- e a) h)) det))
+                (define s (/ (- (* c (- f b)) (* (- e a) d)) det)))
+          (and (<= t 1) (>= t 0) (<= s 1) (>= s 0))))))
+(check-expect
+ (intersect? (make-seg (make-posn 10 2) (make-posn 6 2))
+             (make-seg (make-posn 8 1) (make-posn 6 4))) true)
+(check-expect
+ (intersect? (make-seg (make-posn 0 0) (make-posn 20 20))
+             (make-seg (make-posn 0 1) (make-posn 21 20))) true)
+(check-expect
+ (intersect? (make-seg (make-posn 10 2) (make-posn 6 2))
+             (make-seg (make-posn 0 0) (make-posn 6 6))) false)
+             
+                
+  
+;blocked? Segment World -> Boolean
+(define (blocked? seg w)
+  (ormap (λ(go) (if (and (border? go) (symbol=? (border-type go) 'hard))
+                    (ormap (λ(s) (intersect? seg s))
+                           (lop->los (border-points go)))
+                    false))
+         w))
+   
 ;extend-beams : World -> World
 (define (extend-beams w)
   (map (λ (go) (if (beam? go)
-                   (extend-beam go w)
+                   (if (> (length (beam-points go)) MAX-BEAM-LENGTH)
+                       (make-beam (beam-color go)
+                                  (cons (first (beam-points go))
+                                        (beam-points go))
+                                  (beam-size go)
+                                  (beam-dir go))
+                       (extend-beam go w))
                    go))
        w))
 
@@ -219,18 +280,7 @@
 (define (extend-beam b w)
   (local ((define diry (- 0 (sin (/ (* (beam-dir b) pi) 180))))
           (define dirx (cos (/ (* (beam-dir b) pi) 180)))
-          (define (lop->los lop)
-            (cond
-              [(> (length lop) 1) (cons (make-seg (first lop) (second lop))
-                                        (lop->los (rest lop)))]
-              [else empty]))
-          (define (all-hard-borders x)
-            (foldr (λ (go l) (if (and (border? go)
-                                      (symbol=? (border-type go) 'hard))
-                                 (append (lop->los (border-points go)) l)
-                                 l))
-                   empty
-                   w))
+          
           ;intersects : Segment -> [Pair Number Beam] or false
           ;uses matrices to determine if the beam intersects a segment
           (define (intersects? seg)
@@ -280,18 +330,28 @@
                                            (< (pair-x res) (pair-x beam))) res]
                                       [else beam])))
                                 false
-                                (all-hard-borders 1))))
+                                (all-hard-borders w))))
         (if (false? result)
             b
             (pair-y result))))
+
+;clear-beams: World -> World
+(define (clear-beams w)
+  (foldr (λ (go l) (if (and (beam? go)
+                            (> (length (beam-points go)) (+ MAX-BEAM-LENGTH
+                                                            BEAM-HOLD-TIME)))
+                       l   
+                       (cons go l)))
+         empty
+         w))
 
 ;tick : GS -> GS
 (define (tick w)
   (if (symbol? w)
       w
-      #|TODO|#(extend-beams w)))
+      #|TODO|#(clear-beams (extend-beams w))))
 
 (big-bang LEVEL0
-          (on-tick tick 1/2)
+          (on-tick tick 1/15)
           (on-key key)
           (to-draw draw))
