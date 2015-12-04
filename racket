@@ -25,7 +25,7 @@
 ; An Enemy is a (make-enemy Posn Number Number)
 ; where posn is the location of the center of the enemy
 ; where ang is the direction facing in degrees CCW from the right
-; where size is the enery's radius
+; where size is the enemy's radius
 (define-struct enemy (posn ang size))
 
 ; A BorderType (BT) is one of
@@ -80,7 +80,7 @@
                                        (make-posn (- GAME-WIDTH 25) 25))
                                  8)))
 (define LEVEL0 (append (list (make-player (make-posn 200 40) 90 10)
-                             (make-enemy (make-posn 420 69) 72 25) 
+                             (make-enemy (make-posn 420 69) 160 25) 
                              (make-enemy (make-posn 87 192) 250 15)
                              (make-border 'hard (list (make-posn 300 575)
                                                       (make-posn 300 300)
@@ -204,12 +204,6 @@
       (draw-borders w (draw-beams w (draw-enemies w (draw-players w BG))))))
 
 ;===============================================================================
-
-;key : GS KeyEvent -> GS
-(define (key w ke)
-  (if (symbol? w)
-      w
-      #|TODO|#w))
 
 ;lop->los : [Listof Posn] -> [Listof Seg]
 (define (lop->los lop)
@@ -344,6 +338,36 @@
                        (cons go l)))
          empty
          w))
+
+;; ENEMY FUNCTIONS
+
+(define (test e x)
+  (atan (- (posn-y (player-posn x)) (posn-y (enemy-posn e)))
+        (- (posn-x (player-posn x)) (posn-x (enemy-posn e)))))
+
+;; player-in-view?: Enemy World -> Boolean
+(define (player-in-view? e w)
+  (ormap (λ(x) (if (player? x)
+                   (and (<= (abs (- (atan (- (posn-y (player-posn x))
+                                             (posn-y (enemy-posn e)))
+                                          (- (posn-x (player-posn x))
+                                             (posn-x (enemy-posn e))))
+                                    (* (/ pi 180) (enemy-ang e))))
+                            10)
+                        (not (blocked? (make-seg (player-posn x)
+                                                 (enemy-posn e)) w)))
+                   false))
+         w))
+
+(check-expect (player-in-view? (make-enemy (make-posn 420 69) 160 25) LEVEL0)
+              true)
+
+
+;key : GS KeyEvent -> GS
+(define (key w ke)
+  (if (symbol? w)
+      w
+      #|TODO|#w))
 
 ;tick : GS -> GS
 (define (tick w)
