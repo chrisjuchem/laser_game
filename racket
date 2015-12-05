@@ -1,4 +1,3 @@
-
 (require 2htdp/image)
 (require 2htdp/universe)
 
@@ -6,8 +5,9 @@
 
 ; A GameState (GS) is one of
 ; - A World
-; - 'death
-; - 'win
+; - (make-end 'death Number)
+; - (make-end 'win Number)
+(define-struct end (state time))
 
 ; A World is [Listof GO]
 
@@ -145,7 +145,8 @@
                              (make-border 'hard (list (make-posn 525 575)
                                                       (make-posn 625 510)) 4))
                        LEVEL))
-                             
+
+(define levels (list LEVEL1 LEVEL2 LEVEL3 LEVEL4))
 
 ;===============================================================================
 
@@ -422,20 +423,22 @@
 
 ;key : GS KeyEvent -> GS
 (define (key w ke)
-  (if (symbol? w)
+  (if (end? w)
       w
       #|TODO|#w))
 
 ;tick : GS -> GS
 (define (tick w)
-  (if (symbol? w)
-      w
+  (if (end? w)
+      (cond
+        [(and (= (end-time w) 0) (symbol=? (end-state w) 'win))
+         (list-ref levels (random (length levels)))]
+        [else (make-end (end-state w) (- (end-time w)))])
       #|TODO|#(clear-beams (extend-beams w))))
 
+;=====================================================================================
 
-;; main : Number -> Game
-(define (main n)
-  (big-bang (select-level n)
-            (on-tick tick 1/15)
-            (on-key key)
-            (to-draw draw)))
+(big-bang (list-ref levels (random (length levels)))
+          (on-tick tick 1/15)
+          (on-key key)
+          (to-draw draw))
