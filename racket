@@ -1,3 +1,4 @@
+
 (require 2htdp/image)
 (require 2htdp/universe)
 
@@ -69,7 +70,7 @@
 (define ENEMY-COLOR 'red)
 
 (define HARD-COLOR 'black)
-(define SOFT-COLOR 'grey)
+(define SOFT-COLOR 'gray)
 
 (define LEVEL (list (make-border 'hard
                                  (list (make-posn (- GAME-WIDTH 25) 25)
@@ -79,21 +80,76 @@
                                        (make-posn 25 25)
                                        (make-posn (- GAME-WIDTH 25) 25))
                                  8)))
-(define LEVEL0 (append (list (make-player (make-posn 200 40) 90 10)
-                             (make-enemy (make-posn 420 69) 160 25) 
-                             (make-enemy (make-posn 87 192) 250 15)
+
+;; LEVELS
+
+(define LEVEL1 (append (list (make-player (make-posn 75 40) 0 10)
+                             (make-enemy (make-posn 350 550) 90 15) 
+                             (make-enemy (make-posn 550 100) 200 15)
+                             (make-enemy (make-posn 650 400) 160 25)
+                             (make-border 'hard (list (make-posn 550 25)
+                                                      (make-posn 425 95)) 4)
                              (make-border 'hard (list (make-posn 300 575)
                                                       (make-posn 300 300)
                                                       (make-posn 340 470)) 4)
                              (make-border 'hard (list (make-posn 400 575)
                                                       (make-posn 400 300)
                                                       (make-posn 360 470)) 4)
-                             (make-beam 'cyan (list (make-posn 420 69)) 3 120))
+                             (make-border 'soft (list (make-posn 25 250)
+                                                      (make-posn 100 250)
+                                                      (make-posn 100 25)) 4))
                      LEVEL))
+
+(define LEVEL2 (append (list (make-player (make-posn 75 75) 0 10)
+                             (make-enemy (make-posn 725 75) 180 10)
+                             (make-border 'hard (list (make-posn 225 275)
+                                                      (make-posn 225 575)) 4)
+                             (make-border 'hard (list (make-posn 325 25)
+                                                      (make-posn 325 275)) 4)
+                             (make-border 'hard (list (make-posn 425 275)
+                                                      (make-posn 425 575)) 4)
+                             (make-border 'hard (list (make-posn 525 25)
+                                                      (make-posn 525 275)) 4)
+                             (make-border 'hard (list (make-posn 625 275)
+                                                      (make-posn 625 575)) 4)
+                             (make-border 'soft (list (make-posn 225 275)
+                                                      (make-posn 325 275)) 4))
+                       LEVEL))
+
+(define LEVEL3 (append (list (make-player (make-posn 725 500) 180 10)
+                             (make-enemy (make-posn 400 500) 45 10)
+                             (make-enemy (make-posn 100 225) 60 20)
+                             (make-enemy (make-posn 300 350) 0 5)
+                             (make-border 'hard (list (make-posn 400 400)
+                                                      (make-posn 375 525)
+                                                      (make-posn 425 525)
+                                                      (make-posn 465 475)) 4)
+                             (make-border 'hard (list (make-posn 60 250)
+                                                      (make-posn 80 100)) 4)
+                             (make-border 'hard (list (make-posn 140 250)
+                                                      (make-posn 180 150)) 4)
+                             (make-border 'soft (list (make-posn 485 575)
+                                                      (make-posn 485 25)) 4))
+                       LEVEL))
+
+(define LEVEL4 (append (list (make-player (make-posn 200 550) 90 10)
+                             (make-enemy (make-posn 200 70) 325 10)
+                             (make-enemy (make-posn 700 275) 180 15)
+                             (make-enemy (make-posn 675 500) 180 10)
+                             (make-border 'hard (list (make-posn 100 75)
+                                                      (make-posn 250 150)) 4)
+                             (make-border 'hard (list (make-posn 550 25)
+                                                      (make-posn 650 100)) 4)
+                             (make-border 'hard (list (make-posn 575 200)
+                                                      (make-posn 475 400)) 4)
+                             (make-border 'hard (list (make-posn 525 575)
+                                                      (make-posn 625 510)) 4))
+                       LEVEL))
+                             
 
 ;===============================================================================
 
-;IMAGE FUNCZTIONS
+;IMAGE FUNCTIONS
 
 ;place-image-posn : Image Posn Image -> Image
 (define (place-image-posn i1 p i2)
@@ -110,9 +166,6 @@
                                 (triangle (player-size p) 'solid 'black)
                                 0 -1
                                 (circle (player-size p) 'outline 'black))))
-(check-expect (player-img (make-player (make-posn 2 4) -30 5)) .)
-(check-expect (player-img (make-player (make-posn 2 4) 90 10)) .)
-(check-expect (player-img (make-player (make-posn 2 4) 137 25)) .)
           
 ;enemy-img : Enemy -> Image
 (define (enemy-img e)
@@ -122,9 +175,6 @@
                                 0 -1
                                 (overlay (circle (enemy-size e) 'outline 'black)
                                          (circle (enemy-size e) 'solid 'red)))))
-(check-expect (enemy-img (make-enemy (make-posn 2 4) -30 5)) .)
-(check-expect (enemy-img (make-enemy (make-posn 2 4) 90 10)) .)
-(check-expect (enemy-img (make-enemy (make-posn 2 4) 137 25)) .)
 
 
 ;add-seg : Segment Color Number Image -> Image
@@ -341,10 +391,6 @@
 
 ;; ENEMY FUNCTIONS
 
-(define (test e x)
-  (atan (- (posn-y (player-posn x)) (posn-y (enemy-posn e)))
-        (- (posn-x (player-posn x)) (posn-x (enemy-posn e)))))
-
 ;; player-in-view?: Enemy World -> Boolean
 (define (player-in-view? e w)
   (ormap (λ(x) (if (player? x)
@@ -359,9 +405,20 @@
                    false))
          w))
 
-(check-expect (player-in-view? (make-enemy (make-posn 420 69) 160 25) LEVEL0)
+(check-expect (player-in-view? (make-enemy (make-posn 420 69) 160 25) LEVEL1)
               true)
 
+
+;; BIG BANG FUNCTIONS
+
+;; select-level : Number -> World
+(define (select-level n)
+  (cond
+    [(= 1 n) LEVEL1]
+    [(= 2 n) LEVEL2]
+    [(= 3 n) LEVEL3]
+    [(= 4 n) LEVEL4]
+    [else (error "Not a valid level")]))
 
 ;key : GS KeyEvent -> GS
 (define (key w ke)
@@ -375,7 +432,10 @@
       w
       #|TODO|#(clear-beams (extend-beams w))))
 
-(big-bang LEVEL0
-          (on-tick tick 1/15)
-          (on-key key)
-          (to-draw draw))
+
+;; main : Number -> Game
+(define (main n)
+  (big-bang (select-level n)
+            (on-tick tick 1/15)
+            (on-key key)
+            (to-draw draw)))
