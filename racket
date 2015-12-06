@@ -281,7 +281,7 @@
          empty
          w))
 
-;intersect? : Seg Seg -> Boolean
+;intersect? : Seg Seg -> Number Boolean
 (define (intersect? s1 s2)
   (local ((define a (posn-x (seg-from s1)))
           (define b (posn-y (seg-from s1)))
@@ -296,8 +296,10 @@
         false
         (local ((define t (/ (- (* g (- f b)) (* (- e a) h)) det))
                 (define s (/ (- (* c (- f b)) (* (- e a) d)) det)))
-          (and (<= t 1) (>= t 0) (<= s 1) (>= s 0))))))
-(check-expect
+          (if (and (<= s 1) (>= s 0))
+              t
+              false)))))
+#|(check-expect
  (intersect? (make-seg (make-posn 10 2) (make-posn 6 2))
              (make-seg (make-posn 8 1) (make-posn 6 4))) true)
 (check-expect
@@ -306,13 +308,14 @@
 (check-expect
  (intersect? (make-seg (make-posn 10 2) (make-posn 6 2))
              (make-seg (make-posn 0 0) (make-posn 6 6))) false)
-             
+|#             
                 
   
 ;blocked? Segment World -> Boolean
 (define (blocked? seg w)
   (ormap (λ(go) (if (and (border? go) (symbol=? (border-type go) 'hard))
-                    (ormap (λ(s) (intersect? seg s))
+                    (ormap (λ(s) (local ((define t (intersect? seg s)))
+                                   (and (not (false? t)) (>= t 0) (<= t 1))))
                            (lop->los (border-points go)))
                     false))
          w))
@@ -471,6 +474,31 @@
              x))
        w))
 
+(define (distance seg p)
+  (local ((define perp (make-seg (make-posn (+ (posn-y (seg-from seg)) (posn-y p))
+                                            (+ (posn-x (seg-from seg)) (posn-x p)))
+                                 (make-posn (+ (- (posn-y (seg-to seg)) (posn-y (seg-from seg))) (posn-y p))
+                                            (+ (- (posn-x (seg-from seg)) (posn-x (seg-to seg))) (posn-x p)))))
+          (define t (intersect? perp seg)))
+    (if (false? t)
+        false
+        (sqrt (+ (sqr (* t (- (posn-x (seg-to seg)) (posn-x (seg-from seg)))))
+                 (sqr (* t (- (posn-y (seg-from seg)) (posn-y (seg-to seg))))))))))
+#|
+(distance (make-seg (make-posn 0 0) (make-posn 0 1)) (make-posn .5 4))
+(distance (make-seg (make-posn 0 0) (make-posn 6 6)) (make-posn 3 4))
+|#
+
+(define (movement-blocked? p w)
+  (ormap (λ (go) (if (border? go)
+                     (ormap (λ(seg) (local ((define ans (distance seg (player-posn p))))
+                                      (if (false? ans)
+                                          ans
+                                          (< ans (player-size p)))))
+                            (lop->los (border-points go)))
+                     false))
+         w))
+    
 ;; segment-collision? : Posn [Listof Posns] -> Boolean
 (define (segment-collision? p b)
   (cond
@@ -564,7 +592,7 @@
 
 ;===============================================================================
 
-(big-bang TEST;(list-ref levels (random (length levels)))
+#;(big-bang TEST;(list-ref levels (random (length levels)))
           (on-tick tick 1/15)
           (on-key key)
           (to-draw draw))
