@@ -73,6 +73,9 @@
 (define HARD-COLOR 'black)
 (define SOFT-COLOR 'gray)
 
+(define PLAYER-MOVEMENT 5)
+(define PLAYER-ANGLE-ADJUST 3)
+
 (define BETWEEN-LEVEL-TIME 60)
 
 (define LEVEL (list (make-border 'hard
@@ -463,6 +466,25 @@
 
 ;; PLAYER FUNCTIONS
 
+; move-forward : Posn Number Number -> Posn
+(define (move-forward posn ang dist)
+   (make-posn
+    (+ (posn-x posn) (* (cos (deg-to-rad ang)) dist))
+    (- (posn-y posn) (* (sin (deg-to-rad ang)) dist))))
+
+; move-backward : Posn Number Number -> Posn
+(define (move-backward posn ang dist)
+   (make-posn
+    (- (posn-x posn) (* (cos (deg-to-rad ang)) dist))
+    (+ (posn-y posn) (* (sin (deg-to-rad ang)) dist))))
+                         
+
+
+; converts number in degrees to radians
+; deg-rad : Number -> Number
+(define (deg-to-rad num)
+  (* num (/ pi 180)))
+
 ;; player-die : World -> World
 (define (player-die w)
   (local ((define COMPLETE-WORLD w)
@@ -485,11 +507,32 @@
 
 ;; BIG BANG FUNCTIONS
 
-;key : GS KeyEvent -> GS
 (define (key w ke)
-  (if (end? w)
+  (if (symbol? w)
       w
-      #|TODO|#w))
+      (cond
+        [(key=? ke "up") (map (λ (x) (if (player? x) (make-player
+                                                           (move-forward (player-posn x) (player-ang x) PLAYER-MOVEMENT)
+                                                           (player-ang x) (player-size x))
+                                  x)) w)]
+        [(key=? ke "down") (map (λ (x) (if (player? x) (make-player
+                                                           (move-backward (player-posn x) (player-ang x) PLAYER-MOVEMENT)
+                                                           (player-ang x) (player-size x))
+                                  x)) w)]
+        [(key=? ke "left") (map (λ (x) (if (player? x) (make-player (player-posn x)
+                                                                         (+ (player-ang x) PLAYER-ANGLE-ADJUST)
+                                                                         (player-size x))
+                                                                         x)) w)]
+        [(key=? ke "right") (map (λ (x) (if (player? x) (make-player (player-posn x)
+                                                                          (- (player-ang x) PLAYER-ANGLE-ADJUST)
+                                                                          (player-size x))
+                                                                          x)) w)]
+        [(key=? ke " ") (append (list (make-beam 'blue (foldr append empty (map (λ (x)
+                                                              (if (player? x) (list (player-posn x)
+                                                                  (move-forward (player-posn x) (player-ang x) 2))
+                                                                  empty)) w)) 2
+                                          ((λ (x) (if (player? x) (player-ang x) x)) w))) w)]
+        [else w])))
 
 ;tick : GS -> GS
 (define (tick w)
