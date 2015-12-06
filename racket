@@ -110,7 +110,7 @@
                              (make-border 'soft (list (make-posn 25 250)
                                                       (make-posn 100 250)
                                                       (make-posn 100 25)) 4))
-                     LEVEL))
+                       LEVEL))
 (define LEVEL2 (append (list (make-player (make-posn 75 75) 0 10)
                              (make-enemy (make-posn 725 75) 180 10 0)
                              (make-border 'hard (list (make-posn 225 275)
@@ -174,8 +174,9 @@
           (overlay/align/offset 'middle 'top
                                 (triangle (player-size p) 'solid 'black)
                                 0 -1
-                                (circle (player-size p) 'outline 'black))))
-          
+                                (overlay (circle (player-size p) 'outline 'black)
+                                         (circle (player-size p) 'solid 'white)))))
+
 ;enemy-img : Enemy -> Image
 (define (enemy-img e)
   (rotate (- (enemy-ang e) 90)
@@ -262,8 +263,8 @@
                  [(symbol=? (end-state w) 'death) (text "YOU LOSE" 60 'black)]
                  [else (text "YOU WIN" 60 'black)])
            (local ((define w1 (if (end? w)
-                                 (end-world w)
-                                 w)))
+                                  (end-world w)
+                                  w)))
              (draw-borders w1 (draw-enemies w1 (draw-players w1 (draw-beams w1 BG)))))))
 
 ;===============================================================================
@@ -312,8 +313,8 @@
  (intersect? (make-seg (make-posn 10 2) (make-posn 6 2))
              (make-seg (make-posn 0 0) (make-posn 6 6))) false)
 |#             
-                
-  
+
+
 ;blocked? Segment World -> Boolean
 (define (blocked? seg w)
   (ormap (λ(go) (if (and (border? go) (symbol=? (border-type go) 'hard))
@@ -322,7 +323,7 @@
                            (lop->los (border-points go)))
                     false))
          w))
-   
+
 ;extend-beams : World -> World
 (define (extend-beams w)
   (map (λ (go) (if (beam? go)
@@ -381,7 +382,7 @@
                             (+ (if (< x 0) 180 0)
                                (* (atan (/ y x))
                                   (/ 180 pi))))))
-                         false)))))
+                        false)))))
           (define result (foldr (λ (seg beam)
                                   (local ((define res (intersects? seg)))
                                     (cond
@@ -391,9 +392,9 @@
                                       [else beam])))
                                 false
                                 (all-hard-borders w))))
-        (if (false? result)
-            b
-            (pair-y result))))
+    (if (false? result)
+        b
+        (pair-y result))))
 
 ;clear-beams: World -> World
 (define (clear-beams w)
@@ -418,7 +419,7 @@
                         10)
                     (not (blocked? (make-seg (player-posn x)
                                              (enemy-posn e)) w))))
-                   
+         
          w))
 
 (check-expect (player-in-view? (make-enemy (make-posn 420 69) 160 25 0) LEVEL1)
@@ -441,7 +442,7 @@
                                                 (enemy-ang (first w))
                                                 (enemy-size (first w))
                                                 COOLDOWN)
-                                                (help (rest w))))
+                                    (help (rest w))))
                         (cons (first w) (help (rest w))))])))
     (help w)))
 
@@ -506,23 +507,23 @@
          w))
 
 (movement-blocked? (make-player (make-posn 27 80) 5 5) LEVEL)
-    
+
 
 
 ;; PLAYER FUNCTIONS
 
 ; move-forward : Posn Number Number -> Posn
 (define (move-forward posn ang dist)
-   (make-posn
-    (+ (posn-x posn) (* (cos (deg-to-rad ang)) dist))
-    (- (posn-y posn) (* (sin (deg-to-rad ang)) dist))))
+  (make-posn
+   (+ (posn-x posn) (* (cos (deg-to-rad ang)) dist))
+   (- (posn-y posn) (* (sin (deg-to-rad ang)) dist))))
 
 ; move-backward : Posn Number Number -> Posn
 (define (move-backward posn ang dist)
-   (make-posn
-    (- (posn-x posn) (* (cos (deg-to-rad ang)) dist))
-    (+ (posn-y posn) (* (sin (deg-to-rad ang)) dist))))
-                        
+  (make-posn
+   (- (posn-x posn) (* (cos (deg-to-rad ang)) dist))
+   (+ (posn-y posn) (* (sin (deg-to-rad ang)) dist))))
+
 ; converts number in degrees to radians
 ; deg-rad : Number -> Number
 (define (deg-to-rad num)
@@ -591,18 +592,26 @@
                                      w)]
               [else w])))))
 
+(define (win? w)
+  (if (end? w)
+      w
+      (if (ormap (λ(x) (enemy? x))
+                 w)
+          w
+          (make-end 'win BETWEEN-LEVEL-TIME w))))
+
 ;tick : GS -> GS
 (define (tick w)
   (if (end? w)
       (cond
         [(and (= (end-time w) 0) (symbol=? (end-state w) 'win))
          (list-ref levels (random (length levels)))]
-        [else (make-end (end-state w) (- (end-time w)) (end-world w))])
-      #|TODO|# (player-die (cooldown-time (clear-beams (enemy-fire (enemies-die (extend-beams w))))))))
+        [else (make-end (end-state w) (- (end-time w) 1) (end-world w))])
+      (win? (player-die (cooldown-time (clear-beams (enemy-fire (enemies-die (extend-beams w)))))))))
 
 ;===============================================================================
 
-(big-bang TEST;(list-ref levels (random (length levels)))
+(big-bang LEVEL4;(list-ref levels (random (length levels)))
           (on-tick tick 1/15)
           (on-key key)
           (to-draw draw))
