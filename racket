@@ -1,5 +1,3 @@
-;; TEST
-
 (require 2htdp/image)
 (require 2htdp/universe)
 
@@ -75,8 +73,8 @@
 (define HARD-COLOR 'black)
 (define SOFT-COLOR 'gray)
 
-(define PLAYER-MOVEMENT 5)
-(define PLAYER-ANGLE-ADJUST 3)
+(define PLAYER-MOVEMENT 3)
+(define PLAYER-ANGLE-ADJUST 5)
 
 (define BETWEEN-LEVEL-TIME 60)
 
@@ -258,9 +256,10 @@
 ;Uses 0,0 as the top left
 ;draw : GS -> Image
 (define (draw w)
-  (if (symbol? w)
-      BG;TODO -> (cond [(symbol=? w ...) ...]    ...
-      (draw-borders w (draw-beams w (draw-enemies w (draw-players w BG))))))
+  (overlay (cond [(list? w) empty-image]
+                 [(symbol=? (end-state 'death)) (text "YOU LOSE" 'black 60)]
+                 [else (text "YOU WIN" 'black 60)])
+           (draw-borders w (draw-enemies w (draw-players w (draw-beams w BG))))))
 
 ;===============================================================================
 
@@ -529,11 +528,12 @@
                                                                           (- (player-ang x) PLAYER-ANGLE-ADJUST)
                                                                           (player-size x))
                                                                           x)) w)]
-        [(key=? ke " ") (append (list (make-beam 'blue (foldr append empty (map (λ (x)
-                                                              (if (player? x) (list (player-posn x)
-                                                                  (move-forward (player-posn x) (player-ang x) 2))
-                                                                  empty)) w)) 2
-                                          ((λ (x) (if (player? x) (player-ang x) x)) w))) w)]
+        [(key=? ke " ") (foldr (λ (go l) (if (player? go)
+                                              (cons (make-beam FRIENDLY-COLOR (list (player-posn go)) BEAM-SIZE (player-ang go))
+                                                    (cons go l))
+                                              (cons go l)))
+                                empty
+                                w)]
         [else w])))
 
 ;tick : GS -> GS
