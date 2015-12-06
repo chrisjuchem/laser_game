@@ -23,11 +23,12 @@
 ; where size is the player's radius
 (define-struct player (posn ang size))
 
-; An Enemy is a (make-enemy Posn Number Number)
+; An Enemy is a (make-enemy Posn Number Number Number)
 ; where posn is the location of the center of the enemy
 ; where ang is the direction facing in degrees CCW from the right
 ; where size is the enemy's radius
-(define-struct enemy (posn ang size))
+; cooldown is the time between firing
+(define-struct enemy (posn ang size cooldown))
 
 ; A BorderType (BT) is one of
 ; - 'hard
@@ -64,8 +65,9 @@
 (define BG (empty-scene GAME-WIDTH GAME-HEIGHT))
 
 (define MAX-BEAM-LENGTH 8)
-(define BEAM-HOLD-TIME 15)
+(define BEAM-HOLD-TIME 5)
 (define BEAM-SIZE 3)
+(define COOLDOWN (+ MAX-BEAM-LENGTH BEAM-HOLD-TIME 5))
 
 (define FRIENDLY-COLOR 'cyan)
 (define ENEMY-COLOR 'red)
@@ -91,12 +93,12 @@
 
 ;; TEST LEVEL where player is in view from start
 (define TEST (append (list (make-player (make-posn 300 300) 0 10)
-                           (make-enemy (make-posn 500 300) 180 10))
+                           (make-enemy (make-posn 500 300) 180 10 0))
                      LEVEL))
 (define LEVEL1 (append (list (make-player (make-posn 75 40) 0 10)
-                             (make-enemy (make-posn 350 550) 90 15) 
-                             (make-enemy (make-posn 550 100) 200 15)
-                             (make-enemy (make-posn 650 400) 160 25)
+                             (make-enemy (make-posn 350 550) 90 15 0) 
+                             (make-enemy (make-posn 550 100) 200 15 0)
+                             (make-enemy (make-posn 650 400) 160 25 0)
                              (make-border 'hard (list (make-posn 550 25)
                                                       (make-posn 425 95)) 4)
                              (make-border 'hard (list (make-posn 300 575)
@@ -110,7 +112,7 @@
                                                       (make-posn 100 25)) 4))
                      LEVEL))
 (define LEVEL2 (append (list (make-player (make-posn 75 75) 0 10)
-                             (make-enemy (make-posn 725 75) 180 10)
+                             (make-enemy (make-posn 725 75) 180 10 0)
                              (make-border 'hard (list (make-posn 225 275)
                                                       (make-posn 225 575)) 4)
                              (make-border 'hard (list (make-posn 325 25)
@@ -125,9 +127,9 @@
                                                       (make-posn 325 275)) 4))
                        LEVEL))
 (define LEVEL3 (append (list (make-player (make-posn 725 500) 180 10)
-                             (make-enemy (make-posn 400 500) 45 10)
-                             (make-enemy (make-posn 100 225) 60 20)
-                             (make-enemy (make-posn 300 350) 0 5)
+                             (make-enemy (make-posn 400 500) 45 10 0)
+                             (make-enemy (make-posn 100 225) 60 20 0)
+                             (make-enemy (make-posn 300 350) 0 5 0)
                              (make-border 'hard (list (make-posn 400 400)
                                                       (make-posn 375 525)
                                                       (make-posn 425 525)
@@ -140,9 +142,9 @@
                                                       (make-posn 485 25)) 4))
                        LEVEL))
 (define LEVEL4 (append (list (make-player (make-posn 200 550) 90 10)
-                             (make-enemy (make-posn 200 70) 325 10)
-                             (make-enemy (make-posn 700 275) 180 15)
-                             (make-enemy (make-posn 675 500) 180 10)
+                             (make-enemy (make-posn 200 70) 325 10 0)
+                             (make-enemy (make-posn 700 275) 180 15 0)
+                             (make-enemy (make-posn 675 500) 180 10 0)
                              (make-border 'hard (list (make-posn 100 75)
                                                       (make-posn 250 150)) 4)
                              (make-border 'hard (list (make-posn 550 25)
@@ -407,13 +409,13 @@
                                       (- (posn-x (player-posn x))
                                          (posn-x (enemy-posn e))))
                                 (* (/ pi 180) (enemy-ang e))))
-                        15)
+                        10)
                     (not (blocked? (make-seg (player-posn x)
                                              (enemy-posn e)) w))))
                    
          w))
 
-(check-expect (player-in-view? (make-enemy (make-posn 420 69) 160 25) LEVEL1)
+(check-expect (player-in-view? (make-enemy (make-posn 420 69) 160 25 0) LEVEL1)
               true)
 
 ;; enemy-fire : World -> World
@@ -423,12 +425,17 @@
             (cond
               [(empty? w) w]
               [else (if (and (enemy? (first w))
-                             (player-in-view? (first w) COMPLETE-WORLD))
+                             (player-in-view? (first w) COMPLETE-WORLD)
+                             (= (enemy-cooldown (first w)) 0))
                         (cons (make-beam ENEMY-COLOR
                                          (list (enemy-posn (first w)))
                                          BEAM-SIZE
                                          (enemy-ang (first w)))
-                              (cons (first w) (help (rest w))))
+                              (cons (make-enemy (enemy-posn (first w))
+                                                (enemy-ang (first w))
+                                                (enemy-size (first w))
+                                                COOLDOWN)
+                                                (help (rest w))))
                         (cons (first w) (help (rest w))))])))
     (help w)))
 
@@ -449,11 +456,23 @@
   (ormap (λ(x)
            (and (beam? x)
                 (symbol=? (beam-color x) FRIENDLY-COLOR)
-                (beam-collision? (enemy-posn e) (beam-points x))))
+                (segment-collision? (enemy-posn e) (beam-points x))))
          w))
 
-;; beam-collision? : Posn [Listof Posns] -> Boolean
-(define (beam-collision? p b)
+;; cooldown-time : World -> World
+(define (cooldown-time w)
+  (map (λ(x)
+         (if (and (enemy? x)
+                  (> (enemy-cooldown x) 0))
+             (make-enemy (enemy-posn x)
+                         (enemy-ang x)
+                         (enemy-size x)
+                         (sub1 (enemy-cooldown x)))
+             x))
+       w))
+
+;; segment-collision? : Posn [Listof Posns] -> Boolean
+(define (segment-collision? p b)
   (cond
     [(empty? b) false]
     [else (if (local ((define SLOPE1 (/ (- (posn-y (second b)) (posn-y (first b)))
@@ -462,7 +481,7 @@
                                         (- (posn-x p) (posn-x (first b))))))
                 (= SLOPE1 SLOPE2))
               true
-              (beam-collision? (rest b)))]))
+              (segment-collision? p (rest b)))]))
 
 
 ;; PLAYER FUNCTIONS
@@ -478,9 +497,7 @@
    (make-posn
     (- (posn-x posn) (* (cos (deg-to-rad ang)) dist))
     (+ (posn-y posn) (* (sin (deg-to-rad ang)) dist))))
-                         
-
-
+                        
 ; converts number in degrees to radians
 ; deg-rad : Number -> Number
 (define (deg-to-rad num)
@@ -503,7 +520,7 @@
   (ormap (λ(x)
            (and (beam? x)
                 (symbol=? (beam-color x) ENEMY-COLOR)
-                (beam-collision? (player-posn p) (beam-points x))))
+                (segment-collision? (player-posn p) (beam-points x))))
          w))
 
 ;; BIG BANG FUNCTIONS
@@ -543,7 +560,7 @@
         [(and (= (end-time w) 0) (symbol=? (end-state w) 'win))
          (list-ref levels (random (length levels)))]
         [else (make-end (end-state w) (- (end-time w)))])
-      #|TODO|#(clear-beams (extend-beams (enemy-fire w)))))
+      #|TODO|#(player-die (cooldown-time (clear-beams (extend-beams (enemy-fire w)))))))
 
 ;===============================================================================
 
