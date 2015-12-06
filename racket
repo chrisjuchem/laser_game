@@ -5,9 +5,9 @@
 
 ; A GameState (GS) is one of
 ; - A World
-; - (make-end 'death Number)
+; - (make-end 'death Number World)
 ; - (make-end 'win Number)
-(define-struct end (state time))
+(define-struct end (state time world))
 
 ; A World is [Listof GO]
 
@@ -65,12 +65,15 @@
 
 (define MAX-BEAM-LENGTH 8)
 (define BEAM-HOLD-TIME 15)
+(define BEAM-SIZE 3)
 
 (define FRIENDLY-COLOR 'cyan)
 (define ENEMY-COLOR 'red)
 
 (define HARD-COLOR 'black)
 (define SOFT-COLOR 'gray)
+
+(define BETWEEN-LEVEL-TIME 60)
 
 (define LEVEL (list (make-border 'hard
                                  (list (make-posn (- GAME-WIDTH 25) 25)
@@ -83,6 +86,10 @@
 
 ;; LEVELS
 
+;; TEST LEVEL where player is in view from start
+(define TEST (append (list (make-player (make-posn 300 300) 0 10)
+                           (make-enemy (make-posn 500 300) 180 10))
+                     LEVEL))
 (define LEVEL1 (append (list (make-player (make-posn 75 40) 0 10)
                              (make-enemy (make-posn 350 550) 90 15) 
                              (make-enemy (make-posn 550 100) 200 15)
@@ -99,7 +106,6 @@
                                                       (make-posn 100 250)
                                                       (make-posn 100 25)) 4))
                      LEVEL))
-
 (define LEVEL2 (append (list (make-player (make-posn 75 75) 0 10)
                              (make-enemy (make-posn 725 75) 180 10)
                              (make-border 'hard (list (make-posn 225 275)
@@ -115,7 +121,6 @@
                              (make-border 'soft (list (make-posn 225 275)
                                                       (make-posn 325 275)) 4))
                        LEVEL))
-
 (define LEVEL3 (append (list (make-player (make-posn 725 500) 180 10)
                              (make-enemy (make-posn 400 500) 45 10)
                              (make-enemy (make-posn 100 225) 60 20)
@@ -131,7 +136,6 @@
                              (make-border 'soft (list (make-posn 485 575)
                                                       (make-posn 485 25)) 4))
                        LEVEL))
-
 (define LEVEL4 (append (list (make-player (make-posn 200 550) 90 10)
                              (make-enemy (make-posn 200 70) 325 10)
                              (make-enemy (make-posn 700 275) 180 15)
@@ -145,7 +149,6 @@
                              (make-border 'hard (list (make-posn 525 575)
                                                       (make-posn 625 510)) 4))
                        LEVEL))
-
 (define levels (list LEVEL1 LEVEL2 LEVEL3 LEVEL4))
 
 ;===============================================================================
@@ -394,32 +397,93 @@
 
 ;; player-in-view?: Enemy World -> Boolean
 (define (player-in-view? e w)
-  (ormap (λ(x) (if (player? x)
-                   (and (<= (abs (- (atan (- (posn-y (player-posn x))
-                                             (posn-y (enemy-posn e)))
-                                          (- (posn-x (player-posn x))
-                                             (posn-x (enemy-posn e))))
-                                    (* (/ pi 180) (enemy-ang e))))
-                            10)
-                        (not (blocked? (make-seg (player-posn x)
-                                                 (enemy-posn e)) w)))
-                   false))
+  (ormap (λ(x) (and (player? x)
+                    (<= (abs (- (atan (- (posn-y (player-posn x))
+                                         (posn-y (enemy-posn e)))
+                                      (- (posn-x (player-posn x))
+                                         (posn-x (enemy-posn e))))
+                                (* (/ pi 180) (enemy-ang e))))
+                        15)
+                    (not (blocked? (make-seg (player-posn x)
+                                             (enemy-posn e)) w))))
+                   
          w))
 
 (check-expect (player-in-view? (make-enemy (make-posn 420 69) 160 25) LEVEL1)
               true)
 
+;; enemy-fire : World -> World
+(define (enemy-fire w)
+  (local ((define COMPLETE-WORLD w)
+          (define (help w)
+            (cond
+              [(empty? w) w]
+              [else (if (and (enemy? (first w))
+                             (player-in-view? (first w) COMPLETE-WORLD))
+                        (cons (make-beam ENEMY-COLOR
+                                         (list (enemy-posn (first w)))
+                                         BEAM-SIZE
+                                         (enemy-ang (first w)))
+                              (cons (first w) (help (rest w))))
+                        (cons (first w) (help (rest w))))])))
+    (help w)))
+
+;; enemies-die : World -> World
+(define (enemies-die w)
+  (local ((define COMPLETE-WORLD w)
+          (define (help w)
+            (cond
+              [(empty? w) w]
+              [else (if (and (enemy? (first w))
+                             (enemy-beam-collisions? (first w) COMPLETE-WORLD))
+                        (help (rest w))
+                        (cons (first w) (rest w)))])))
+    (help w)))
+
+;; enemy-beam-collisions? : Enemy World -> Boolean
+(define (enemy-beam-collisions? e w)
+  (ormap (λ(x)
+           (and (beam? x)
+                (symbol=? (beam-color x) FRIENDLY-COLOR)
+                (beam-collision? (enemy-posn e) (beam-points x))))
+         w))
+
+;; beam-collision? : Posn [Listof Posns] -> Boolean
+(define (beam-collision? p b)
+  (cond
+    [(empty? b) false]
+    [else (if (local ((define SLOPE1 (/ (- (posn-y (second b)) (posn-y (first b)))
+                                        (- (posn-x (second b)) (posn-x (first b)))))
+                      (define SLOPE2 (/ (- (posn-y p) (posn-y (first b)))
+                                        (- (posn-x p) (posn-x (first b))))))
+                (= SLOPE1 SLOPE2))
+              true
+              (beam-collision? (rest b)))]))
+
+
+;; PLAYER FUNCTIONS
+
+;; player-die : World -> World
+(define (player-die w)
+  (local ((define COMPLETE-WORLD w)
+          (define (help w)
+            (cond
+              [(empty? w) w]
+              [else (if (and (player? (first w))
+                             (player-beam-collisions? (first w) COMPLETE-WORLD))
+                        (make-end 'death 0 w)
+                        (cons (first w) (rest w)))])))
+    (help w)))
+
+;; player-beam-collisions? : Player World -> Boolean
+(define (player-beam-collisions? p w)
+  (ormap (λ(x)
+           (and (beam? x)
+                (symbol=? (beam-color x) ENEMY-COLOR)
+                (beam-collision? (player-posn p) (beam-points x))))
+         w))
 
 ;; BIG BANG FUNCTIONS
-
-;; select-level : Number -> World
-(define (select-level n)
-  (cond
-    [(= 1 n) LEVEL1]
-    [(= 2 n) LEVEL2]
-    [(= 3 n) LEVEL3]
-    [(= 4 n) LEVEL4]
-    [else (error "Not a valid level")]))
 
 ;key : GS KeyEvent -> GS
 (define (key w ke)
@@ -434,11 +498,11 @@
         [(and (= (end-time w) 0) (symbol=? (end-state w) 'win))
          (list-ref levels (random (length levels)))]
         [else (make-end (end-state w) (- (end-time w)))])
-      #|TODO|#(clear-beams (extend-beams w))))
+      #|TODO|#(clear-beams (extend-beams (enemy-fire w)))))
 
-;=====================================================================================
+;===============================================================================
 
-(big-bang (list-ref levels (random (length levels)))
+(big-bang TEST;(list-ref levels (random (length levels)))
           (on-tick tick 1/15)
           (on-key key)
           (to-draw draw))
