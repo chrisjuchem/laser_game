@@ -65,7 +65,7 @@
 (define BG (empty-scene GAME-WIDTH GAME-HEIGHT))
 
 (define MAX-BEAM-LENGTH 8)
-(define BEAM-HOLD-TIME 5)
+(define BEAM-HOLD-TIME 1)
 (define BEAM-SIZE 3)
 (define COOLDOWN (+ MAX-BEAM-LENGTH BEAM-HOLD-TIME 5))
 
@@ -110,7 +110,7 @@
                              (make-border 'soft (list (make-posn 25 250)
                                                       (make-posn 100 250)
                                                       (make-posn 100 25)) 4))
-                     LEVEL))
+                       LEVEL))
 (define LEVEL2 (append (list (make-player (make-posn 75 75) 0 10)
                              (make-enemy (make-posn 725 75) 180 10 0)
                              (make-border 'hard (list (make-posn 225 275)
@@ -175,7 +175,7 @@
                                 (triangle (player-size p) 'solid 'black)
                                 0 -1
                                 (circle (player-size p) 'outline 'black))))
-          
+
 ;enemy-img : Enemy -> Image
 (define (enemy-img e)
   (rotate (- (enemy-ang e) 90)
@@ -306,9 +306,9 @@
 (check-expect
  (intersect? (make-seg (make-posn 10 2) (make-posn 6 2))
              (make-seg (make-posn 0 0) (make-posn 6 6))) false)
-             
-                
-  
+
+
+
 ;blocked? Segment World -> Boolean
 (define (blocked? seg w)
   (ormap (λ(go) (if (and (border? go) (symbol=? (border-type go) 'hard))
@@ -316,7 +316,7 @@
                            (lop->los (border-points go)))
                     false))
          w))
-   
+
 ;extend-beams : World -> World
 (define (extend-beams w)
   (map (λ (go) (if (beam? go)
@@ -375,7 +375,7 @@
                             (+ (if (< x 0) 180 0)
                                (* (atan (/ y x))
                                   (/ 180 pi))))))
-                         false)))))
+                        false)))))
           (define result (foldr (λ (seg beam)
                                   (local ((define res (intersects? seg)))
                                     (cond
@@ -385,9 +385,9 @@
                                       [else beam])))
                                 false
                                 (all-hard-borders w))))
-        (if (false? result)
-            b
-            (pair-y result))))
+    (if (false? result)
+        b
+        (pair-y result))))
 
 ;clear-beams: World -> World
 (define (clear-beams w)
@@ -412,7 +412,7 @@
                         10)
                     (not (blocked? (make-seg (player-posn x)
                                              (enemy-posn e)) w))))
-                   
+         
          w))
 
 (check-expect (player-in-view? (make-enemy (make-posn 420 69) 160 25 0) LEVEL1)
@@ -435,7 +435,7 @@
                                                 (enemy-ang (first w))
                                                 (enemy-size (first w))
                                                 COOLDOWN)
-                                                (help (rest w))))
+                                    (help (rest w))))
                         (cons (first w) (help (rest w))))])))
     (help w)))
 
@@ -488,16 +488,16 @@
 
 ; move-forward : Posn Number Number -> Posn
 (define (move-forward posn ang dist)
-   (make-posn
-    (+ (posn-x posn) (* (cos (deg-to-rad ang)) dist))
-    (- (posn-y posn) (* (sin (deg-to-rad ang)) dist))))
+  (make-posn
+   (+ (posn-x posn) (* (cos (deg-to-rad ang)) dist))
+   (- (posn-y posn) (* (sin (deg-to-rad ang)) dist))))
 
 ; move-backward : Posn Number Number -> Posn
 (define (move-backward posn ang dist)
-   (make-posn
-    (- (posn-x posn) (* (cos (deg-to-rad ang)) dist))
-    (+ (posn-y posn) (* (sin (deg-to-rad ang)) dist))))
-                        
+  (make-posn
+   (- (posn-x posn) (* (cos (deg-to-rad ang)) dist))
+   (+ (posn-y posn) (* (sin (deg-to-rad ang)) dist))))
+
 ; converts number in degrees to radians
 ; deg-rad : Number -> Number
 (define (deg-to-rad num)
@@ -526,32 +526,52 @@
 ;; BIG BANG FUNCTIONS
 
 (define (key w ke)
-  (if (symbol? w)
-      w
-      (cond
-        [(key=? ke "up") (map (λ (x) (if (player? x) (make-player
-                                                           (move-forward (player-posn x) (player-ang x) PLAYER-MOVEMENT)
-                                                           (player-ang x) (player-size x))
-                                  x)) w)]
-        [(key=? ke "down") (map (λ (x) (if (player? x) (make-player
-                                                           (move-backward (player-posn x) (player-ang x) PLAYER-MOVEMENT)
-                                                           (player-ang x) (player-size x))
-                                  x)) w)]
-        [(key=? ke "left") (map (λ (x) (if (player? x) (make-player (player-posn x)
-                                                                         (+ (player-ang x) PLAYER-ANGLE-ADJUST)
-                                                                         (player-size x))
-                                                                         x)) w)]
-        [(key=? ke "right") (map (λ (x) (if (player? x) (make-player (player-posn x)
-                                                                          (- (player-ang x) PLAYER-ANGLE-ADJUST)
-                                                                          (player-size x))
-                                                                          x)) w)]
-        [(key=? ke " ") (foldr (λ (go l) (if (player? go)
-                                              (cons (make-beam FRIENDLY-COLOR (list (player-posn go)) BEAM-SIZE (player-ang go))
-                                                    (cons go l))
-                                              (cons go l)))
-                                empty
-                                w)]
-        [else w])))
+  (local ((define COMPLETE-WORLD w))
+    (λ(w)
+      (if (symbol? w)
+          w
+          (cond
+            [(key=? ke "up") (map (λ (x) (if (player? x) (local ((define MOVED (make-player
+                                                                                (move-forward
+                                                                                 (player-posn x)
+                                                                                 (player-ang x) PLAYER-MOVEMENT)
+                                                                                (player-ang x) (player-size x))))
+                                                           (if (movement-blocked? MOVED COMPLETE-WORLD)
+                                                               x
+                                                               MOVED))
+                                             x)) w)]
+            [(key=? ke "down") (map (λ (x) (if (player? x) (local ((define MOVED (make-player
+                                                                                  (move-backward
+                                                                                   (player-posn x)
+                                                                                   (player-ang x) PLAYER-MOVEMENT)
+                                                                                  (player-ang x) (player-size x))))
+                                                             (if (movement-blocked? MOVED COMPLETE-WORLD)
+                                                                 x
+                                                                 MOVED))
+                                               x)) w)]
+            [(key=? ke "left") (map (λ (x) (if (player? x) (local ((define MOVED (make-player
+                                                                                  (player-posn x)
+                                                                                  (+ (player-ang x) PLAYER-ANGLE-ADJUST)
+                                                                                  (player-size x))))
+                                                             (if (movement-blocked? MOVED COMPLETE-WORLD)
+                                                                 x
+                                                                 MOVED))
+                                               x)) w)]
+            [(key=? ke "right") (map (λ (x) (if (player? x) (local ((define MOVED (make-player
+                                                                                   (player-posn x)
+                                                                                   (- (player-ang x) PLAYER-ANGLE-ADJUST)
+                                                                                   (player-size x))))
+                                                              (if (movement-blocked? MOVED COMPLETE-WORLD)
+                                                                  x
+                                                                  MOVED))
+                                                x)) w)]
+            [(key=? ke " ") (foldr (λ (go l) (if (player? go)
+                                                 (cons (make-beam FRIENDLY-COLOR (list (player-posn go)) BEAM-SIZE (player-ang go))
+                                                       (cons go l))
+                                                 (cons go l)))
+                                   empty
+                                   w)]
+            [else w])))))
 
 ;tick : GS -> GS
 (define (tick w)
@@ -560,7 +580,7 @@
         [(and (= (end-time w) 0) (symbol=? (end-state w) 'win))
          (list-ref levels (random (length levels)))]
         [else (make-end (end-state w) (- (end-time w)))])
-      #|TODO|#(player-die (cooldown-time (clear-beams (extend-beams (enemy-fire w)))))))
+      (cooldown-time (clear-beams (extend-beams (enemy-fire w))))))
 
 ;===============================================================================
 
